@@ -7,13 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Phone } from 'lucide-react';
 
 export default function Auth() {
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('+33');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const { signInWithPhone, signUpWithPhone, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -27,13 +27,13 @@ export default function Auth() {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signIn(email, password);
+    const { error } = await signInWithPhone(phone, password);
     
     if (error) {
       toast({
         title: "Erreur de connexion",
         description: error.message === 'Invalid login credentials' 
-          ? "Email ou mot de passe incorrect"
+          ? "Téléphone ou mot de passe incorrect"
           : error.message,
         variant: "destructive",
       });
@@ -60,13 +60,13 @@ export default function Auth() {
       return;
     }
 
-    const { error } = await signUp(email, password);
+    const { error } = await signUpWithPhone(phone, password);
     
     if (error) {
       toast({
         title: "Erreur d'inscription",
         description: error.message.includes('already registered')
-          ? "Cet email est déjà utilisé"
+          ? "Ce numéro est déjà utilisé"
           : error.message,
         variant: "destructive",
       });
@@ -108,15 +108,19 @@ export default function Auth() {
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
-                  <Input
-                    id="signin-email"
-                    type="email"
-                    placeholder="vous@exemple.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="signin-phone">Téléphone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="signin-phone"
+                      type="tel"
+                      placeholder="+33612345678"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signin-password">Mot de passe</Label>
@@ -139,15 +143,19 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="vous@exemple.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="signup-phone">Téléphone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="signup-phone"
+                      type="tel"
+                      placeholder="+33612345678"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Mot de passe</Label>
