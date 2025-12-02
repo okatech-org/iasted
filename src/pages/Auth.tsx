@@ -7,10 +7,24 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles, Phone } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const countryCodes = [
+  { code: '+33', country: 'FR', flag: '🇫🇷' },
+  { code: '+1', country: 'US', flag: '🇺🇸' },
+  { code: '+44', country: 'UK', flag: '🇬🇧' },
+  { code: '+49', country: 'DE', flag: '🇩🇪' },
+  { code: '+34', country: 'ES', flag: '🇪🇸' },
+  { code: '+39', country: 'IT', flag: '🇮🇹' },
+  { code: '+32', country: 'BE', flag: '🇧🇪' },
+  { code: '+41', country: 'CH', flag: '🇨🇭' },
+];
 
 export default function Auth() {
-  const [phone, setPhone] = useState('+33');
+  const [countryCode, setCountryCode] = useState('+33');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { signInWithPhone, signUpWithPhone, user } = useAuth();
@@ -23,11 +37,13 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
+  const fullPhone = `${countryCode}${phoneNumber}`;
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signInWithPhone(phone, password);
+    const { error } = await signInWithPhone(fullPhone, password);
     
     if (error) {
       toast({
@@ -60,7 +76,7 @@ export default function Auth() {
       return;
     }
 
-    const { error } = await signUpWithPhone(phone, password);
+    const { error } = await signUpWithPhone(fullPhone, password);
     
     if (error) {
       toast({
@@ -78,6 +94,61 @@ export default function Auth() {
     }
     setIsLoading(false);
   };
+
+  const PhoneInput = () => (
+    <div className="space-y-2">
+      <Label>Téléphone</Label>
+      <div className="flex gap-2">
+        <Select value={countryCode} onValueChange={setCountryCode}>
+          <SelectTrigger className="w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {countryCodes.map((c) => (
+              <SelectItem key={c.code} value={c.code}>
+                <span className="flex items-center gap-2">
+                  <span>{c.flag}</span>
+                  <span>{c.code}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="tel"
+          placeholder="612345678"
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+          className="flex-1"
+          required
+        />
+      </div>
+    </div>
+  );
+
+  const PasswordInput = ({ id }: { id: string }) => (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Mot de passe (7 caractères)</Label>
+      <div className="flex justify-center">
+        <InputOTP
+          maxLength={7}
+          value={password}
+          onChange={setPassword}
+          id={id}
+        >
+          <InputOTPGroup>
+            <InputOTPSlot index={0} className="w-10 h-12 text-lg font-mono" />
+            <InputOTPSlot index={1} className="w-10 h-12 text-lg font-mono" />
+            <InputOTPSlot index={2} className="w-10 h-12 text-lg font-mono" />
+            <InputOTPSlot index={3} className="w-10 h-12 text-lg font-mono" />
+            <InputOTPSlot index={4} className="w-10 h-12 text-lg font-mono" />
+            <InputOTPSlot index={5} className="w-10 h-12 text-lg font-mono" />
+            <InputOTPSlot index={6} className="w-10 h-12 text-lg font-mono" />
+          </InputOTPGroup>
+        </InputOTP>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
@@ -106,34 +177,10 @@ export default function Auth() {
             </TabsList>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-phone">Téléphone</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signin-phone"
-                      type="tel"
-                      placeholder="+33612345678"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">Mot de passe</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full gradient-bg" disabled={isLoading}>
+              <form onSubmit={handleSignIn} className="space-y-6">
+                <PhoneInput />
+                <PasswordInput id="signin-password" />
+                <Button type="submit" className="w-full gradient-bg" disabled={isLoading || password.length < 7}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Se connecter
                 </Button>
@@ -141,35 +188,10 @@ export default function Auth() {
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-phone">Téléphone</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signup-phone"
-                      type="tel"
-                      placeholder="+33612345678"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Mot de passe</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                  />
-                </div>
-                <Button type="submit" className="w-full gradient-bg" disabled={isLoading}>
+              <form onSubmit={handleSignUp} className="space-y-6">
+                <PhoneInput />
+                <PasswordInput id="signup-password" />
+                <Button type="submit" className="w-full gradient-bg" disabled={isLoading || password.length < 7}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Créer un compte
                 </Button>
