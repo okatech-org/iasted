@@ -7,14 +7,29 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles, Mail } from 'lucide-react';
+import { Loader2, Sparkles, Mail, Phone } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const countryCodes = [
+  { code: '+33', country: 'FR', flag: '🇫🇷' },
+  { code: '+1', country: 'US', flag: '🇺🇸' },
+  { code: '+44', country: 'UK', flag: '🇬🇧' },
+  { code: '+49', country: 'DE', flag: '🇩🇪' },
+  { code: '+34', country: 'ES', flag: '🇪🇸' },
+  { code: '+39', country: 'IT', flag: '🇮🇹' },
+  { code: '+32', country: 'BE', flag: '🇧🇪' },
+  { code: '+41', country: 'CH', flag: '🇨🇭' },
+];
 
 export default function Auth() {
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
   const [email, setEmail] = useState('');
+  const [countryCode, setCountryCode] = useState('+33');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, signInWithPhone, signUpWithPhone, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -24,17 +39,21 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
+  const fullPhone = `${countryCode}${phoneNumber}`;
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signIn(email, password);
+    const { error } = authMethod === 'email' 
+      ? await signIn(email, password)
+      : await signInWithPhone(fullPhone, password);
     
     if (error) {
       toast({
         title: "Erreur de connexion",
         description: error.message === 'Invalid login credentials' 
-          ? "Email ou mot de passe incorrect"
+          ? "Identifiants incorrects"
           : error.message,
         variant: "destructive",
       });
@@ -51,23 +70,25 @@ export default function Auth() {
     e.preventDefault();
     setIsLoading(true);
     
-    if (password.length < 6) {
+    if (password.length < 7) {
       toast({
         title: "Mot de passe trop court",
-        description: "Le mot de passe doit contenir au moins 6 caractères",
+        description: "Le mot de passe doit contenir 7 caractères",
         variant: "destructive",
       });
       setIsLoading(false);
       return;
     }
 
-    const { error } = await signUp(email, password);
+    const { error } = authMethod === 'email'
+      ? await signUp(email, password)
+      : await signUpWithPhone(fullPhone, password);
     
     if (error) {
       toast({
         title: "Erreur d'inscription",
         description: error.message.includes('already registered')
-          ? "Cet email est déjà utilisé"
+          ? "Ce compte existe déjà"
           : error.message,
         variant: "destructive",
       });
@@ -80,6 +101,29 @@ export default function Auth() {
     setIsLoading(false);
   };
 
+  const AuthMethodToggle = () => (
+    <div className="flex gap-2 mb-4">
+      <Button
+        type="button"
+        variant={authMethod === 'email' ? 'default' : 'outline'}
+        className={authMethod === 'email' ? 'gradient-bg flex-1' : 'flex-1'}
+        onClick={() => setAuthMethod('email')}
+      >
+        <Mail className="w-4 h-4 mr-2" />
+        Email
+      </Button>
+      <Button
+        type="button"
+        variant={authMethod === 'phone' ? 'default' : 'outline'}
+        className={authMethod === 'phone' ? 'gradient-bg flex-1' : 'flex-1'}
+        onClick={() => setAuthMethod('phone')}
+      >
+        <Phone className="w-4 h-4 mr-2" />
+        Téléphone
+      </Button>
+    </div>
+  );
+
   const EmailInput = () => (
     <div className="space-y-2">
       <Label>Email</Label>
@@ -91,6 +135,37 @@ export default function Auth() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="pl-10"
+          required
+        />
+      </div>
+    </div>
+  );
+
+  const PhoneInput = () => (
+    <div className="space-y-2">
+      <Label>Téléphone</Label>
+      <div className="flex gap-2">
+        <Select value={countryCode} onValueChange={setCountryCode}>
+          <SelectTrigger className="w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {countryCodes.map((c) => (
+              <SelectItem key={c.code} value={c.code}>
+                <span className="flex items-center gap-2">
+                  <span>{c.flag}</span>
+                  <span>{c.code}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="tel"
+          placeholder="661002616"
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+          className="flex-1"
           required
         />
       </div>
@@ -149,7 +224,8 @@ export default function Auth() {
             
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-6">
-                <EmailInput />
+                <AuthMethodToggle />
+                {authMethod === 'email' ? <EmailInput /> : <PhoneInput />}
                 <PasswordInput id="signin-password" />
                 <Button type="submit" className="w-full gradient-bg" disabled={isLoading || password.length < 7}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -160,7 +236,8 @@ export default function Auth() {
             
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-6">
-                <EmailInput />
+                <AuthMethodToggle />
+                {authMethod === 'email' ? <EmailInput /> : <PhoneInput />}
                 <PasswordInput id="signup-password" />
                 <Button type="submit" className="w-full gradient-bg" disabled={isLoading || password.length < 7}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
