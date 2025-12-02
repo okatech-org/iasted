@@ -7,27 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Mail } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-const countryCodes = [
-  { code: '+33', country: 'FR', flag: '🇫🇷' },
-  { code: '+1', country: 'US', flag: '🇺🇸' },
-  { code: '+44', country: 'UK', flag: '🇬🇧' },
-  { code: '+49', country: 'DE', flag: '🇩🇪' },
-  { code: '+34', country: 'ES', flag: '🇪🇸' },
-  { code: '+39', country: 'IT', flag: '🇮🇹' },
-  { code: '+32', country: 'BE', flag: '🇧🇪' },
-  { code: '+41', country: 'CH', flag: '🇨🇭' },
-];
 
 export default function Auth() {
-  const [countryCode, setCountryCode] = useState('+33');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signInWithPhone, signUpWithPhone, user } = useAuth();
+  const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -37,19 +24,17 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
-  const fullPhone = `${countryCode}${phoneNumber}`;
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signInWithPhone(fullPhone, password);
+    const { error } = await signIn(email, password);
     
     if (error) {
       toast({
         title: "Erreur de connexion",
         description: error.message === 'Invalid login credentials' 
-          ? "Téléphone ou mot de passe incorrect"
+          ? "Email ou mot de passe incorrect"
           : error.message,
         variant: "destructive",
       });
@@ -76,13 +61,13 @@ export default function Auth() {
       return;
     }
 
-    const { error } = await signUpWithPhone(fullPhone, password);
+    const { error } = await signUp(email, password);
     
     if (error) {
       toast({
         title: "Erreur d'inscription",
         description: error.message.includes('already registered')
-          ? "Ce numéro est déjà utilisé"
+          ? "Cet email est déjà utilisé"
           : error.message,
         variant: "destructive",
       });
@@ -95,31 +80,17 @@ export default function Auth() {
     setIsLoading(false);
   };
 
-  const PhoneInput = () => (
+  const EmailInput = () => (
     <div className="space-y-2">
-      <Label>Téléphone</Label>
-      <div className="flex gap-2">
-        <Select value={countryCode} onValueChange={setCountryCode}>
-          <SelectTrigger className="w-[100px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {countryCodes.map((c) => (
-              <SelectItem key={c.code} value={c.code}>
-                <span className="flex items-center gap-2">
-                  <span>{c.flag}</span>
-                  <span>{c.code}</span>
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <Label>Email</Label>
+      <div className="relative">
+        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          type="tel"
-          placeholder="612345678"
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-          className="flex-1"
+          type="email"
+          placeholder="vous@exemple.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="pl-10"
           required
         />
       </div>
@@ -178,7 +149,7 @@ export default function Auth() {
             
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-6">
-                <PhoneInput />
+                <EmailInput />
                 <PasswordInput id="signin-password" />
                 <Button type="submit" className="w-full gradient-bg" disabled={isLoading || password.length < 7}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -189,7 +160,7 @@ export default function Auth() {
             
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-6">
-                <PhoneInput />
+                <EmailInput />
                 <PasswordInput id="signup-password" />
                 <Button type="submit" className="w-full gradient-bg" disabled={isLoading || password.length < 7}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
