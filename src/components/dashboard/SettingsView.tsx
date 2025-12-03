@@ -42,7 +42,7 @@ export function SettingsView() {
         setLoadingLogs(true);
         try {
             const { data, error } = await supabase
-                .from('usage_logs')
+                .from('usage_logs' as any)
                 .select('*')
                 .order('created_at', { ascending: false })
                 .limit(100);
