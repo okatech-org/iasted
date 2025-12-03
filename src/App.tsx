@@ -7,6 +7,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import IAstedPage from "./pages/IAstedPage";
+import IAstedInterface from "./components/iasted/IAstedInterface";
 
 const queryClient = new QueryClient();
 
@@ -20,8 +22,10 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/iasted" element={<IAstedPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <IAstedInterface />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

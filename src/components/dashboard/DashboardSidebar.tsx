@@ -1,13 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  MessageSquare, 
-  FolderOpen, 
-  FileText, 
-  Settings, 
+import {
+  MessageSquare,
+  FolderOpen,
+  FileText,
+  Settings,
   LogOut,
   Sparkles,
-  Plus
+  Plus,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -17,14 +18,18 @@ interface DashboardSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
+import { useNavigate, useLocation } from 'react-router-dom';
+
 const navItems = [
-  { id: 'chat', label: 'Chat IA', icon: MessageSquare },
   { id: 'projects', label: 'Projets', icon: FolderOpen },
   { id: 'specifications', label: 'Cahiers des charges', icon: FileText },
+  { id: 'vision', label: 'iAsted Vision', icon: Eye },
 ];
 
 export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarProps) {
   const { signOut, user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <div className="w-64 h-screen bg-card border-r border-border flex flex-col">
@@ -38,19 +43,8 @@ export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarPro
         </div>
       </div>
 
-      {/* New Chat Button */}
-      <div className="p-4">
-        <Button 
-          className="w-full gradient-bg justify-start gap-2"
-          onClick={() => onTabChange('chat')}
-        >
-          <Plus className="w-4 h-4" />
-          Nouveau chat
-        </Button>
-      </div>
-
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-3">
+      <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">
           {navItems.map((item) => (
             <Button
@@ -58,8 +52,8 @@ export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarPro
               variant="ghost"
               className={cn(
                 "w-full justify-start gap-3 font-medium",
-                activeTab === item.id 
-                  ? "bg-primary/10 text-primary hover:bg-primary/15" 
+                (activeTab === item.id || (item.path && location.pathname === item.path))
+                  ? "bg-primary/10 text-primary hover:bg-primary/15"
                   : "text-muted-foreground hover:text-foreground"
               )}
               onClick={() => onTabChange(item.id)}
@@ -86,13 +80,23 @@ export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarPro
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" className="flex-1 justify-start gap-2 text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "flex-1 justify-start gap-2",
+              activeTab === 'settings'
+                ? "bg-primary/10 text-primary hover:bg-primary/15"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => onTabChange('settings')}
+          >
             <Settings className="w-4 h-4" />
             Paramètres
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="text-muted-foreground hover:text-destructive"
             onClick={signOut}
           >

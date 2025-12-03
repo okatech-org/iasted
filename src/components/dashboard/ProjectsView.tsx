@@ -1,189 +1,333 @@
 import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ProjectCard } from './ProjectCard';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { Plus, Search, FolderOpen } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { FolderOpen, Github, HardDrive, Plus, Search, MoreVertical, Loader2, AlertCircle, CheckCircle2, Trash2, Archive, PlayCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { WorkflowView } from './WorkflowView';
+
+// Types
+interface ProjectSource {
+  type: 'github' | 'local' | 'drive';
+  path: string;
+  name?: string;
+}
 
 interface Project {
   id: string;
   name: string;
-  description: string | null;
-  status: string;
-  tech_stack: string[] | null;
-  created_at: string;
+  description: string;
+  sources: ProjectSource[];
+  status: 'active' | 'archived' | 'deleted';
+  lastUpdated: Date;
+  workflow_data?: any;
 }
+
+// Mock API Service
+const apiService = {
+  getProjects: async (): Promise<Project[]> => {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return [
+      {
+        id: '1',
+        name: 'Site Présidence',
+        description: 'Site officiel avec repo GitHub et assets Drive',
+        sources: [
+          { type: 'github', path: 'okatech/presidence.ga', name: 'Repo' },
+          { type: 'drive', path: 'Drive/Specs/V2.pdf', name: 'Specs' }
+        ],
+        status: 'active',
+        lastUpdated: new Date()
+      },
+      {
+        id: '2',
+        name: 'Dashboard Admin',
+        description: 'Interface administration',
+        sources: [
+          { type: 'local', path: '/Users/okatech/dashboard', name: 'Code' }
+        ],
+        status: 'active',
+        lastUpdated: new Date()
+      },
+      {
+        id: '3',
+        name: 'Ancien Site',
+        description: 'Version 2023',
+        sources: [
+          { type: 'github', path: 'okatech/old-site' }
+        ],
+        status: 'archived',
+        lastUpdated: new Date('2023-12-01')
+      },
+    ];
+  },
+  createProject: async (project: Partial<Project>): Promise<Project> => {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return {
+      id: Math.random().toString(36).substr(2, 9),
+      name: project.name || 'Nouveau Projet',
+      description: project.description || '',
+      sources: project.sources || [],
+      status: 'active',
+      lastUpdated: new Date(),
+    } as Project;
+  },
+  updateProjectStatus: async (id: string, status: 'active' | 'archived' | 'deleted') => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return true;
+  }
+};
 
 export function ProjectsView() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [viewFilter, setViewFilter] = useState<'active' | 'archived'>('active');
+
+  // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newProject, setNewProject] = useState({ name: '', description: '' });
-  const { user } = useAuth();
-  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // New Project Form State
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    sources: [] as ProjectSource[]
+  });
+  const [tempSource, setTempSource] = useState<ProjectSource>({ type: 'local', path: '' });
 
   useEffect(() => {
-    if (user) {
-      fetchProjects();
-    }
-  }, [user]);
+    loadProjects();
+  }, []);
 
-  const fetchProjects = async () => {
+  const loadProjects = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les projets",
-        variant: "destructive",
-      });
-    } else {
-      setProjects(data || []);
+    try {
+      const data = await apiService.getProjects();
+      setProjects(data);
+    } catch (err) {
+      setError("Impossible de charger les projets.");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
-  const createProject = async () => {
-    if (!newProject.name.trim()) return;
-
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({
-        name: newProject.name,
-        description: newProject.description || null,
-        user_id: user?.id,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de créer le projet",
-        variant: "destructive",
+  const handleCreateProject = async () => {
+    if (!formData.name) return;
+    setIsSubmitting(true);
+    try {
+      const newProject = await apiService.createProject({
+        ...formData,
+        sources: [...formData.sources, ...(tempSource.path ? [tempSource] : [])]
       });
-    } else {
-      setProjects([data, ...projects]);
-      setNewProject({ name: '', description: '' });
+      setProjects([newProject, ...projects]);
+      toast.success("Projet créé avec succès");
       setIsDialogOpen(false);
-      toast({
-        title: "Projet créé",
-        description: `"${data.name}" a été créé avec succès`,
-      });
+      setFormData({ name: '', description: '', sources: [] });
+      setTempSource({ type: 'local', path: '' });
+    } catch (err) {
+      toast.error("Erreur lors de la création");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const handleStatusChange = async (id: string, status: 'active' | 'archived' | 'deleted') => {
+    try {
+      await apiService.updateProjectStatus(id, status);
+      setProjects(projects.map(p => p.id === id ? { ...p, status } : p));
+      toast.success(`Projet ${status === 'deleted' ? 'supprimé' : status === 'archived' ? 'archivé' : 'restauré'} `);
+    } catch (err) {
+      toast.error("Action impossible");
+    }
+  };
+
+  const getSourceIcon = (type: string) => {
+    switch (type) {
+      case 'github': return <Github className="w-4 h-4" />;
+      case 'drive': return <HardDrive className="w-4 h-4 text-blue-500" />;
+      case 'local': return <FolderOpen className="w-4 h-4 text-yellow-500" />;
+      default: return <FolderOpen className="w-4 h-4" />;
+    }
+  };
+
+  const filteredProjects = projects.filter(p =>
+    p.status === viewFilter &&
+    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  if (selectedProject) {
+    return <WorkflowView project={selectedProject} onBack={() => setSelectedProject(null)} />;
+  }
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-full p-6 bg-background overflow-y-auto">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Projets</h1>
-          <p className="text-muted-foreground">Gérez vos projets et cahiers des charges</p>
+          <h1 className="text-3xl font-bold">Projets</h1>
+          <p className="text-muted-foreground">
+            Hub central de vos applications (GitHub, Drive, Local)
+          </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gradient-bg gap-2">
-              <Plus className="w-4 h-4" />
-              Nouveau projet
+
+        <div className="flex gap-2">
+          <div className="flex bg-muted rounded-lg p-1">
+            <Button
+              variant={viewFilter === 'active' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewFilter('active')}
+            >
+              Actifs
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Créer un nouveau projet</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nom du projet</Label>
-                <Input
-                  id="name"
-                  placeholder="Mon super projet"
-                  value={newProject.name}
-                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Décrivez brièvement votre projet..."
-                  value={newProject.description}
-                  onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                />
-              </div>
-              <Button onClick={createProject} className="w-full gradient-bg">
-                Créer le projet
+            <Button
+              variant={viewFilter === 'archived' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewFilter('archived')}
+            >
+              Archives
+            </Button>
+          </div>
+
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gradient-bg">
+                <Plus className="w-4 h-4 mr-2" />
+                Nouveau Projet
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Créer un Hub Projet</DialogTitle>
+                <DialogDescription>
+                  Rassemblez toutes les sources (Code, Specs, Assets) en un seul lieu.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 mt-4">
+                <div className="grid gap-2">
+                  <Label>Nom du projet</Label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Mon Super Projet"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Source Principale</Label>
+                  <div className="flex gap-2">
+                    <select
+                      className="flex h-10 w-[120px] items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={tempSource.type}
+                      onChange={(e) => setTempSource({ ...tempSource, type: e.target.value as any })}
+                    >
+                      <option value="local">Local</option>
+                      <option value="github">GitHub</option>
+                      <option value="drive">Drive</option>
+                    </select>
+                    <Input
+                      value={tempSource.path}
+                      onChange={(e) => setTempSource({ ...tempSource, path: e.target.value })}
+                      placeholder={tempSource.type === 'github' ? 'user/repo' : '/path/to/folder'}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="mt-6">
+                <Button onClick={handleCreateProject} disabled={isSubmitting} className="gradient-bg w-full">
+                  {isSubmitting ? <Loader2 className="animate-spin" /> : 'Créer le Hub'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <div className="mb-6 relative">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Rechercher un projet..."
-          className="pl-10 bg-muted/50 border-0"
+          placeholder="Rechercher dans vos hubs..."
+          className="pl-10 max-w-md"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-40 rounded-xl bg-muted animate-pulse" />
-          ))}
-        </div>
-      ) : filteredProjects.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={() => console.log('Open project:', project.id)}
-            />
-          ))}
-        </div>
+        <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center mb-6">
-            <FolderOpen className="w-10 h-10 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            {searchQuery ? 'Aucun projet trouvé' : 'Aucun projet'}
-          </h3>
-          <p className="text-muted-foreground mb-6">
-            {searchQuery 
-              ? 'Essayez avec d\'autres mots-clés' 
-              : 'Créez votre premier projet pour commencer'}
-          </p>
-          {!searchQuery && (
-            <Button onClick={() => setIsDialogOpen(true)} className="gradient-bg gap-2">
-              <Plus className="w-4 h-4" />
-              Créer un projet
-            </Button>
-          )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProjects.map((project) => (
+            <Card
+              key={project.id}
+              className="hover:shadow-md transition-all cursor-pointer group border-l-4 border-l-transparent hover:border-l-primary"
+              onClick={() => setSelectedProject(project)}
+            >
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    {getSourceIcon(project.sources[0]?.type || 'local')}
+                  </div>
+                  <div className="space-y-1">
+                    <CardTitle className="text-base font-bold">{project.name}</CardTitle>
+                    <div className="flex gap-2 text-xs text-muted-foreground">
+                      {project.sources.map((s, i) => (
+                        <span key={i} className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded">
+                          {getSourceIcon(s.type)} {s.name || s.type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {project.status === 'active' ? (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStatusChange(project.id, 'archived'); }}>
+                        <Archive className="w-4 h-4 mr-2" /> Archiver
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStatusChange(project.id, 'active'); }}>
+                        <PlayCircle className="w-4 h-4 mr-2" /> Restaurer
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); handleStatusChange(project.id, 'deleted'); }}>
+                      <Trash2 className="w-4 h-4 mr-2" /> Supprimer
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground line-clamp-2 mt-2 mb-4 h-10">
+                  {project.description || "Aucune description"}
+                </p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
+                  <Badge variant="outline" className="font-normal">
+                    {project.sources.length} source{project.sources.length > 1 ? 's' : ''}
+                  </Badge>
+                  <span>
+                    Màj {new Date(project.lastUpdated).toLocaleDateString()}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>
