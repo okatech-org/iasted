@@ -20,14 +20,14 @@ export function VoiceSettings({ onResumeSession }: VoiceSettingsProps = {}) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data, error } = await supabase
-        .from('user_preferences')
+      const { data, error } = await (supabase
+        .from('user_preferences' as any)
         .select('voice_continuous_mode')
         .eq('user_id', user.id)
-        .single();
+        .single() as any);
 
       if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      return data as { voice_continuous_mode: boolean } | null;
     }
   });
 
@@ -36,14 +36,14 @@ export function VoiceSettings({ onResumeSession }: VoiceSettingsProps = {}) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { error } = await supabase
-        .from('user_preferences')
+      const { error } = await (supabase
+        .from('user_preferences' as any)
         .upsert({
           user_id: user.id,
           voice_continuous_mode: enabled
         }, {
           onConflict: 'user_id'
-        });
+        }) as any);
 
       if (error) throw error;
     },

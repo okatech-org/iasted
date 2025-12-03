@@ -11,9 +11,9 @@ import { toast } from "sonner";
 
 interface FocusSession {
   id: string;
-  focus_mode: string;
   started_at: string;
   ended_at: string | null;
+  metadata: any;
 }
 
 interface FocusSessionsPanelProps {
@@ -33,16 +33,15 @@ export function FocusSessionsPanel({ onResumeSession }: FocusSessionsPanelProps)
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('conversation_sessions')
-        .select('id, focus_mode, started_at, ended_at')
+      const { data, error } = await (supabase
+        .from('conversation_sessions' as any)
+        .select('id, started_at, ended_at, metadata')
         .eq('user_id', user.id)
-        .not('focus_mode', 'is', null)
         .order('started_at', { ascending: false })
-        .limit(10);
+        .limit(10) as any);
 
       if (error) throw error;
-      setSessions(data || []);
+      setSessions((data || []) as FocusSession[]);
     } catch (error) {
       console.error('Error loading focus sessions:', error);
       toast.error("Erreur lors du chargement des sessions");
@@ -87,7 +86,7 @@ export function FocusSessionsPanel({ onResumeSession }: FocusSessionsPanelProps)
                 className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
               >
                 <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium">{session.focus_mode}</p>
+                  <p className="text-sm font-medium">Session</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
                     <span>

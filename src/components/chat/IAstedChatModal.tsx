@@ -475,10 +475,10 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
         try {
             setMessages(prev => prev.filter(m => m.id !== messageId));
             if (sessionId) {
-                const { error } = await supabase
-                    .from('conversation_messages')
+                const { error } = await (supabase
+                    .from('conversation_messages' as any)
                     .delete()
-                    .eq('id', messageId);
+                    .eq('id', messageId) as any);
                 if (error) console.error('Erreur suppression message:', error);
             }
             toast({ title: "Message supprimé", duration: 2000 });
@@ -493,10 +493,10 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
                 m.id === messageId ? { ...m, content: newContent } : m
             ));
             if (sessionId) {
-                const { error } = await supabase
-                    .from('conversation_messages')
+                const { error } = await (supabase
+                    .from('conversation_messages' as any)
                     .update({ content: newContent })
-                    .eq('id', messageId);
+                    .eq('id', messageId) as any);
                 if (error) console.error('Erreur modification message:', error);
             }
             toast({ title: "Message modifié", duration: 2000 });
@@ -515,19 +515,19 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
             setMessages([]);
             openaiRTC.clearSession();
             if (sessionId) {
-                const { error: deleteError } = await supabase
-                    .from('conversation_messages')
+                const { error: deleteError } = await (supabase
+                    .from('conversation_messages' as any)
                     .delete()
-                    .eq('session_id', sessionId);
+                    .eq('session_id', sessionId) as any);
                 if (deleteError) console.error('Erreur suppression messages:', deleteError);
 
-                const { error: updateError } = await supabase
-                    .from('conversation_sessions')
+                const { error: updateError } = await (supabase
+                    .from('conversation_sessions' as any)
                     .update({
                         ended_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                     })
-                    .eq('id', sessionId);
+                    .eq('id', sessionId) as any);
                 if (updateError) console.error('Erreur mise à jour session:', updateError);
             }
             toast({ title: "Conversation effacée", duration: 2000 });
@@ -538,11 +538,10 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
         setMessages([]);
         const newSessionId = crypto.randomUUID();
         setSessionId(newSessionId);
-        await supabase.from('conversation_sessions').insert({
-            session_id: newSessionId,
-            user_id: (await supabase.auth.getUser()).data.user?.id,
-            started_at: new Date().toISOString(),
-        });
+        const { data: { user } } = await supabase.auth.getUser();
+        await (supabase.from('conversation_sessions' as any).insert({
+            user_id: user?.id,
+        }) as any);
         toast({ title: "✨ Nouvelle conversation", duration: 2000 });
     };
 
@@ -595,29 +594,28 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
                 return;
             }
 
-            const { data: existingSession } = await supabase
-                .from('conversation_sessions')
+            const { data: existingSession } = await (supabase
+                .from('conversation_sessions' as any)
                 .select('*')
                 .eq('user_id', user.id)
                 .is('ended_at', null)
                 .gte('updated_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
                 .order('updated_at', { ascending: false })
                 .limit(1)
-                .maybeSingle();
+                .maybeSingle() as any);
 
             if (existingSession) {
                 setSessionId(existingSession.id);
                 await loadSessionMessages(existingSession.id);
             } else {
-                const { data: newSession, error } = await supabase
-                    .from('conversation_sessions')
+                const { data: newSession, error } = await (supabase
+                    .from('conversation_sessions' as any)
                     .insert({
                         user_id: user.id,
-                        settings: { mode: 'text' },
-                        focus_mode: null,
+                        metadata: { mode: 'text' },
                     })
                     .select()
-                    .single();
+                    .single() as any);
 
                 if (error) throw error;
                 setSessionId(newSession.id);
@@ -638,14 +636,14 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
     };
 
     const loadSessionMessages = async (sessionId: string) => {
-        const { data: msgs, error } = await supabase
-            .from('conversation_messages')
+        const { data: msgs, error } = await (supabase
+            .from('conversation_messages' as any)
             .select('*')
             .eq('session_id', sessionId)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true }) as any);
 
         if (!error && msgs) {
-            setMessages(msgs.map(m => ({
+            setMessages((msgs as any[]).map((m: any) => ({
                 id: m.id,
                 role: m.role as 'user' | 'assistant',
                 content: m.content,
@@ -722,14 +720,14 @@ export const IAstedChatModal: React.FC<IAstedChatModalProps> = ({
 
     const saveMessage = async (sessionId: string, message: Message) => {
         try {
-            const { error } = await supabase
-                .from('conversation_messages')
+            const { error } = await (supabase
+                .from('conversation_messages' as any)
                 .insert({
                     session_id: sessionId,
                     role: message.role,
                     content: message.content,
                     metadata: message.metadata || {},
-                });
+                }) as any);
             if (error) throw error;
         } catch (error) {
             console.error('❌ [saveMessage] Erreur:', error);

@@ -97,17 +97,17 @@ export const DocumentUploadZone: React.FC<DocumentUploadZoneProps> = ({ onDocume
             updateFileStatus(uploadedFile.id, 'uploading', 50);
 
             // 2. Créer l'entrée dans la table documents
-            const { data: document, error: docError } = await supabase
-                .from('documents')
+            const { data: document, error: docError } = await (supabase
+                .from('documents' as any)
                 .insert({
                     user_id: user.id,
-                    filename: uploadedFile.file.name,
+                    name: uploadedFile.file.name,
                     file_path: filePath,
                     file_type: uploadedFile.file.type,
                     file_size: uploadedFile.file.size,
                 })
                 .select()
-                .single();
+                .single() as any);
 
             if (docError || !document) throw docError || new Error('Failed to create document record');
 
