@@ -72,12 +72,12 @@ serve(async (req) => {
     // --- SMART ROUTER LOGIC ---
     let selectedProvider = 'openai';
     let selectedModel = 'gpt-4o';
-    let activeKey = openaiKey;
+    let activeKey: string | null = openaiKey;
 
     if (mode === 'manual' && manualModel) {
       if (manualModel.startsWith('gpt')) { selectedProvider = 'openai'; selectedModel = manualModel; activeKey = openaiKey; }
       else if (manualModel.startsWith('claude')) { selectedProvider = 'anthropic'; selectedModel = manualModel; activeKey = anthropicKey; }
-      else if (manualModel.startsWith('gemini')) { selectedProvider = 'gemini'; selectedModel = manualModel; activeKey = geminiKey; }
+      else if (manualModel.startsWith('gemini')) { selectedProvider = 'gemini'; selectedModel = manualModel; activeKey = geminiKey ?? null; }
     } else if (mode === 'auto-cost') {
       // Budget Friendly: Prefer Gemini Flash -> GPT-4o-mini
       if (geminiKey) { selectedProvider = 'gemini'; selectedModel = 'gemini-1.5-flash'; activeKey = geminiKey; }
@@ -97,7 +97,7 @@ serve(async (req) => {
     console.log(`[Smart Router] Mode: ${mode}, Selected: ${selectedProvider}/${selectedModel}`);
 
     // --- HYBRID BRAIN EXECUTION ---
-    let stream;
+    let stream: ReadableStream<Uint8Array> | null = null;
     let inputTokens = 0; // Estimated
 
     if (selectedProvider === 'openai') {
@@ -202,16 +202,6 @@ serve(async (req) => {
               if (done) break;
               buffer += decoder.decode(value, { stream: true });
 
-              // Simple JSON parsing logic for stream (simplified for brevity)
-              // In production, use a robust stream parser
-              if (buffer.includes('}')) {
-                // Attempt to parse complete objects
-                // For this demo, we assume Gemini sends clean chunks or we'd need the complex parser from before
-                // Re-using the robust parser from previous version would be ideal, but for brevity:
-                const sse = { choices: [{ delta: { content: "..." } }] }; // Placeholder logic
-                // Actually, let's just pass through the complex parser logic if needed or assume standard behavior
-              }
-              // Re-implementing the robust parser from previous file for Gemini
               while (true) {
                 const openBrace = buffer.indexOf('{');
                 if (openBrace === -1) break;
@@ -251,8 +241,6 @@ serve(async (req) => {
     }
 
     // --- FINOPS LOGGING (Async) ---
-    // We log the request initiation. Tracking full output tokens requires intercepting the stream which is complex.
-    // For V1, we log input tokens and estimated cost.
     const estimatedCost = (inputTokens / 1000) * 0.01; // Dummy cost calculation
 
     // Fire and forget logging
@@ -270,9 +258,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Chat error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

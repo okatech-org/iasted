@@ -30,10 +30,6 @@ serve(async (req) => {
                 break;
 
             case 'anthropic':
-                // Anthropic requires a body for messages, but we can try to list models or just check auth
-                // Unfortunately Anthropic doesn't have a simple "check auth" endpoint without cost or body.
-                // We'll try a very cheap request or a malformed one that checks auth first.
-                // Actually, a request with invalid body but valid key usually returns 400, while invalid key returns 401.
                 const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
@@ -47,12 +43,8 @@ serve(async (req) => {
                         messages: [{ role: 'user', content: 'Hi' }]
                     })
                 });
-                // 200 is valid. 400 might be valid key but bad request (though our request is valid). 
-                // 401/403 is invalid key.
                 isValid = anthropicRes.ok;
                 if (!isValid && anthropicRes.status !== 401 && anthropicRes.status !== 403) {
-                    // If it's not an auth error, the key might be valid but something else is wrong.
-                    // But for safety, we only accept 200.
                     const err = await anthropicRes.text();
                     console.log('Anthropic error:', err);
                 }
@@ -77,7 +69,6 @@ serve(async (req) => {
                 break;
 
             case 'mapbox':
-                // Mapbox public keys can be checked by a simple geocoding request
                 const mapboxRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/Paris.json?access_token=${key}&limit=1`);
                 isValid = mapboxRes.ok;
                 message = isValid ? 'Mapbox Key is valid' : `Mapbox Error: ${mapboxRes.statusText}`;
@@ -92,9 +83,10 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
 
-    } catch (error) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return new Response(
-            JSON.stringify({ valid: false, message: error.message }),
+            JSON.stringify({ valid: false, message: errorMessage }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
     }

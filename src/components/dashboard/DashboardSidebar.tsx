@@ -52,7 +52,7 @@ export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarPro
               variant="ghost"
               className={cn(
                 "w-full justify-start gap-3 font-medium",
-                (activeTab === item.id || (item.path && location.pathname === item.path))
+                activeTab === item.id
                   ? "bg-primary/10 text-primary hover:bg-primary/15"
                   : "text-muted-foreground hover:text-foreground"
               )}
