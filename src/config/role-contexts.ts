@@ -10,12 +10,8 @@ export type AppRole = Database['public']['Enums']['app_role'];
 // Roles authorized to access iAsted
 export const IASTED_AUTHORIZED_ROLES: AppRole[] = [
     'president',
-    'dgr',              // Directeur de Cabinet
-    'cabinet_private',  // Directeur de Cabinet Privé
-    'sec_gen',          // Secrétariat Général
-    'dgss',             // Renseignement
-    'protocol',         // Directeur de Protocole
-    'admin'             // Administrateur Système
+    'admin',
+    'moderator'
 ];
 
 export interface RoleContext {
@@ -41,101 +37,15 @@ export const ROLE_CONTEXTS: Record<AppRole, RoleContext | null> = {
         accessLevel: 'full',
         availableTools: [
             'control_ui',
-            'navigate_within_space',  // Navigation limitée à l'espace présidentiel uniquement
+            'navigate_within_space',
             'generate_document',
-            'view_all_data',          // Consultation des données (lecture seule)
-            'view_intelligence',      // Accès aux rapports de renseignement
-            'view_kpis',              // Consultation des indicateurs nationaux
-            'view_projects',          // Supervision des projets stratégiques
-            'manage_protocol'         // Gestion du protocole présidentiel
+            'view_all_data',
+            'view_intelligence',
+            'view_kpis',
+            'view_projects',
+            'manage_protocol'
         ],
-        contextDescription: 'Vous assistez le Président dans la consultation des informations stratégiques et la supervision de l\'action gouvernementale. Vous ne pouvez PAS naviguer vers les espaces administratifs ou techniques.'
-    },
-    dgr: {
-        role: 'dgr',
-        defaultTitle: {
-            male: 'Monsieur le Directeur',
-            female: 'Madame la Directrice'
-        },
-        tone: 'professional',
-        accessLevel: 'high',
-        availableTools: [
-            'control_ui',
-            'navigate_app',
-            'generate_document',
-            'manage_projects',
-            'manage_instructions',
-            'view_cabinet_data'
-        ],
-        contextDescription: 'Vous assistez le Directeur de Cabinet pour la coordination gouvernementale'
-    },
-    cabinet_private: {
-        role: 'cabinet_private',
-        defaultTitle: {
-            male: 'Monsieur le Directeur',
-            female: 'Madame la Directrice'
-        },
-        tone: 'formal',
-        accessLevel: 'high',
-        availableTools: [
-            'control_ui',
-            'navigate_app',
-            'generate_document',
-            'manage_private_affairs',
-            'view_presidential_agenda'
-        ],
-        contextDescription: 'Vous assistez le Directeur du Cabinet Privé du Président'
-    },
-    sec_gen: {
-        role: 'sec_gen',
-        defaultTitle: {
-            male: 'Monsieur le Secrétaire Général',
-            female: 'Madame la Secrétaire Générale'
-        },
-        tone: 'professional',
-        accessLevel: 'high',
-        availableTools: [
-            'control_ui',
-            'navigate_app',
-            'generate_document',
-            'manage_administration',
-            'coordinate_services'
-        ],
-        contextDescription: 'Vous assistez le Secrétaire Général de la Présidence'
-    },
-    dgss: {
-        role: 'dgss',
-        defaultTitle: {
-            male: 'Monsieur le Directeur',
-            female: 'Madame la Directrice'
-        },
-        tone: 'professional',
-        accessLevel: 'high',
-        availableTools: [
-            'control_ui',
-            'navigate_app',
-            'generate_document',
-            'access_intelligence',
-            'manage_security_reports'
-        ],
-        contextDescription: 'Vous assistez le Directeur Général de la Sécurité et du Contre-Espionnage'
-    },
-    protocol: {
-        role: 'protocol',
-        defaultTitle: {
-            male: 'Monsieur le Directeur',
-            female: 'Madame la Directrice'
-        },
-        tone: 'professional',
-        accessLevel: 'medium',
-        availableTools: [
-            'control_ui',
-            'navigate_app',
-            'generate_document',
-            'manage_protocol',
-            'manage_events'
-        ],
-        contextDescription: 'Vous assistez le Directeur du Protocole de la Présidence'
+        contextDescription: 'Vous assistez le Président dans la consultation des informations stratégiques et la supervision de l\'action gouvernementale.'
     },
     admin: {
         role: 'admin',
@@ -154,18 +64,29 @@ export const ROLE_CONTEXTS: Record<AppRole, RoleContext | null> = {
             'manage_roles',
             'view_audit_logs',
             'system_configuration',
-            'impersonate_user',
-            'override_permissions',
-            'global_navigate',   // [NEW] Universal navigation
-            'security_override'  // [NEW] Hacking capability
+            'global_navigate',
+            'security_override'
         ],
-        contextDescription: "Vous êtes le Super Admin Agent (God Mode). Vous avez l'omniprésence. Vous pouvez naviguer vers n'importe quelle route. Lorsque vous visitez un espace spécifique (ex: Espace Président), vous ADOPTEZ le contexte de ce rôle mais conservez votre savoir admin. Vous pouvez expliquer les fonctionnalités, déboguer et outrepasser la sécurité."
+        contextDescription: "Vous êtes le Super Admin Agent. Vous avez accès complet à toutes les fonctionnalités du système."
     },
-    // Roles without iAsted access
-    minister: null,
-    user: null,
-    courrier: null,
-    reception: null
+    moderator: {
+        role: 'moderator',
+        defaultTitle: {
+            male: 'Monsieur le Modérateur',
+            female: 'Madame la Modératrice'
+        },
+        tone: 'professional',
+        accessLevel: 'medium',
+        availableTools: [
+            'control_ui',
+            'navigate_app',
+            'generate_document',
+            'view_data',
+            'manage_content'
+        ],
+        contextDescription: 'Vous assistez le modérateur dans la gestion du contenu et des utilisateurs.'
+    },
+    user: null
 };
 
 export interface SpaceContext {
@@ -179,31 +100,6 @@ export const SPACE_CONTEXTS: Record<string, SpaceContext> = {
         spaceName: 'PresidentSpace',
         displayName: 'Espace Présidentiel',
         description: 'le tableau de bord présidentiel'
-    },
-    CabinetDirectorSpace: {
-        spaceName: 'CabinetDirectorSpace',
-        displayName: 'Espace Directeur de Cabinet',
-        description: "l'espace de coordination gouvernementale"
-    },
-    PrivateCabinetSpace: {
-        spaceName: 'PrivateCabinetSpace',
-        displayName: 'Cabinet Privé',
-        description: 'le cabinet privé du Président'
-    },
-    SecGenSpace: {
-        spaceName: 'SecGenSpace',
-        displayName: 'Secrétariat Général',
-        description: 'le secrétariat général de la Présidence'
-    },
-    DGSSSpace: {
-        spaceName: 'DGSSSpace',
-        displayName: 'DGSS - Renseignement',
-        description: 'la direction du renseignement'
-    },
-    ProtocolSpace: {
-        spaceName: 'ProtocolSpace',
-        displayName: 'Protocole',
-        description: 'le service du protocole'
     },
     AdminSpace: {
         spaceName: 'AdminSpace',
