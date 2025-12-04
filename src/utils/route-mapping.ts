@@ -1,5 +1,5 @@
 /**
- * Route Mapping for Super Admin Navigation Intelligence
+ * Route Mapping for Navigation Intelligence
  * Maps natural language queries to actual application routes
  */
 
@@ -26,71 +26,7 @@ export const ROUTE_MAP: RouteInfo[] = [
         path: '/admin-space',
         aliases: ['admin', 'administration', 'administrateur', 'espace admin', 'système', 'god mode', 'base'],
         role: 'admin',
-        description: 'Espace Administration Système (Super Admin)'
-    },
-    {
-        path: '/cabinet-director-space',
-        aliases: ['cabinet', 'directeur cabinet', 'dgr', 'coordination'],
-        role: 'dgr',
-        description: 'Espace Directeur de Cabinet'
-    },
-    {
-        path: '/private-cabinet-space',
-        aliases: ['cabinet privé', 'privé', 'cabinet prive', 'affaires privées'],
-        role: 'cabinet_private',
-        description: 'Espace Cabinet Privé du Président'
-    },
-    {
-        path: '/secretariat-general-space',
-        aliases: ['secrétariat', 'secretariat', 'sec gen', 'secrétaire général'],
-        role: 'sec_gen',
-        description: 'Espace Secrétariat Général'
-    },
-    {
-        path: '/dgss-space',
-        aliases: ['dgss', 'renseignement', 'sécurité', 'securite', 'contre-espionnage'],
-        role: 'dgss',
-        description: 'Espace DGSS - Renseignement'
-    },
-    {
-        path: '/protocol-director-space',
-        aliases: ['protocole', 'protocol', 'directeur protocole', 'événements', 'evenements'],
-        role: 'protocol',
-        description: 'Espace Directeur du Protocole'
-    },
-    {
-        path: '/service-reception-space',
-        aliases: [
-            'service reception',
-            'réception',
-            'reception',
-            'accueil',
-            'espace réception',
-            'espace reception',
-            'service accueil',
-            'espace accueil',
-            'réceptionniste',
-            'receptionniste'
-        ],
-        role: 'receptionniste',
-        description: 'Service Réception et Accueil'
-    },
-    {
-        path: '/service-courriers-space',
-        aliases: [
-            'service courriers',
-            'courriers',
-            'courrier',
-            'espace courriers',
-            'espace courrier',
-            'gestion courrier',
-            'gestion courriers',
-            'service du courrier',
-            'messagerie',
-            'correspondance'
-        ],
-        role: 'service_courriers',
-        description: 'Service Courriers et Correspondance'
+        description: 'Espace Administration Système'
     },
     {
         path: '/auth',
