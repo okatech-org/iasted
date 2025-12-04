@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { IAstedChatModal } from '@/components/chat/IAstedChatModal';
+import { IAstedChatModal } from '@/components/iasted/IAstedChatModal';
 import IAstedButtonFull from "@/components/iasted/IAstedButtonFull";
-import { useRealtimeVoiceWebRTC } from '@/hooks/useRealtimeVoiceWebRTC';
+import { useRealtimeVoiceWebRTC } from '@/hooks/useRealtimeVoiceWebRTC'; // Updated hook
 import { IASTED_SYSTEM_PROMPT } from '@/config/iasted-config';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,10 +37,19 @@ export default function IAstedInterface({ userRole = 'user', defaultOpen = false
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Initialize voice from localStorage
+    // Initialize voice from localStorage with validation
     useEffect(() => {
-        const savedVoice = localStorage.getItem('iasted-voice-selection') as 'echo' | 'ash' | 'shimmer';
-        if (savedVoice) setSelectedVoice(savedVoice);
+        const savedVoice = localStorage.getItem('iasted-voice-selection');
+        const validVoices = ['ash', 'shimmer', 'echo', 'alloy', 'ballad', 'coral', 'sage', 'verse'];
+
+        if (savedVoice && validVoices.includes(savedVoice)) {
+            setSelectedVoice(savedVoice as any);
+        } else if (savedVoice) {
+            // Invalid voice found (e.g. african_female), reset to default
+            console.warn(`⚠️ [IAstedInterface] Invalid voice '${savedVoice}' found in storage. Resetting to 'ash'.`);
+            localStorage.setItem('iasted-voice-selection', 'ash');
+            setSelectedVoice('ash');
+        }
     }, []);
 
     // Calculate time-based greeting

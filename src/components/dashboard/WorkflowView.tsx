@@ -3,18 +3,37 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Copy, Check, ExternalLink, Code, Paintbrush, Database, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Copy, Check, ExternalLink, Code, Paintbrush, Database, Sparkles, Loader2, Plus, FolderOpen, Github, HardDrive } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
 
 interface WorkflowViewProps {
     project: any;
     onBack: () => void;
+    onUpdate: (project: any) => void;
 }
 
-export function WorkflowView({ project, onBack }: WorkflowViewProps) {
+export function WorkflowView({ project, onBack, onUpdate }: WorkflowViewProps) {
     const [copiedSection, setCopiedSection] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisData, setAnalysisData] = useState<any>(null);
+    const [isAddSourceOpen, setIsAddSourceOpen] = useState(false);
+    const [newSource, setNewSource] = useState({ type: 'local', path: '' });
+
+    const handleAddSource = () => {
+        if (!newSource.path) return;
+        const updatedProject = {
+            ...project,
+            sources: [...project.sources, newSource]
+        };
+        onUpdate(updatedProject);
+        setIsAddSourceOpen(false);
+        setNewSource({ type: 'local', path: '' });
+        toast.success("Source ajoutée avec succès");
+    };
 
     // Mock data - In real app, this comes from project.workflow_data
     const defaultWorkflowData = {
@@ -56,33 +75,110 @@ Schéma BDD :
     const handleAnalyze = async () => {
         setIsAnalyzing(true);
         toast.info("Gemini analyse vos sources (GitHub, Drive, Local)...");
+        setAnalysisData({
+            research: '',
+            lovable: '',
+            cursorFront: '',
+            cursorBack: ''
+        });
 
-        // Simulate Gemini Analysis
-        setTimeout(() => {
-            setAnalysisData({
-                research: `## 🧠 Analyse Profonde Gemini 1.5 Pro
-        
-**Contexte du Projet :** ${project.description}
-**Sources Analysées :** ${project.sources.length} fichiers (Code + Specs)
-
-### Architecture Détectée
-Le projet semble être une application React/Vite avec une forte composante documentaire.
-L'analyse du code source montre une utilisation de Shadcn UI et Tailwind.
-
-### Recommandations Stratégiques
-1. **Refactoring** : Le composant \`ProjectsView\` est monolithique, il faut le découper.
-2. **Performance** : L'analyse des assets montre des images non optimisées.
-3. **Sécurité** : Les règles RLS Supabase semblent manquantes sur la table \`documents\`.
-
-### Plan d'Action Généré
-Gemini a mis à jour les prompts ci-contre pour inclure ces correctifs spécifiques.`,
-                lovable: defaultWorkflowData.lovable + "\n\n> [!TIP] Gemini: Ajoutez une section 'Upload' drag-and-drop inspirée de la maquette V2.",
-                cursorFront: defaultWorkflowData.cursorFront + "\n\n// Gemini: Attention à la prop-drilling dans DashboardLayout, utilisez un Context.",
-                cursorBack: defaultWorkflowData.cursorBack + "\n\n-- Gemini: Ajoutez un index sur la colonne 'status' pour optimiser les filtres."
+        // Streaming Implementation using fetch
+        try {
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: 'user',
+                            content: `Analyse le projet suivant et génère le plan d'architecture complet (Analyse, Lovable, Frontend, Backend).
+                            
+                            **Nom du Projet:** ${project.name}
+                            **Description:** ${project.description}
+                            **Sources:**
+                            ${project.sources.map((s: any) => `- [${s.type}] ${s.path} (${s.name || ''})`).join('\n')}
+                            
+                            Agis comme un Architecte Solution Senior.`
+                        }
+                    ],
+                    mode: 'auto-power',
+                    model: 'gemini-1.5-pro'
+                })
             });
+
+            if (!response.ok) throw new Error('Network response was not ok');
+
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+
+            if (reader) {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            if (dataStr === '[DONE]') continue;
+                            try {
+                                const data = JSON.parse(dataStr);
+                                const content = data.choices?.[0]?.delta?.content || '';
+                                fullText += content;
+
+                                // Real-time parsing (Simple regex/split approach)
+                                // We look for the headers defined in SYSTEM_PROMPT
+                                const sections = parseSections(fullText);
+                                setAnalysisData(sections);
+                            } catch (e) {
+                                // Ignore parse errors for partial chunks
+                            }
+                        }
+                    }
+                }
+            }
+
+            toast.success("Analyse terminée !");
+        } catch (e) {
+            console.error(e);
+            toast.error("Erreur de connexion à Gemini");
+        } finally {
             setIsAnalyzing(false);
-            toast.success("Analyse terminée ! Les prompts ont été enrichis.");
-        }, 3000);
+        }
+    };
+
+    const parseSections = (text: string) => {
+        const sections = {
+            research: '',
+            lovable: '',
+            cursorFront: '',
+            cursorBack: ''
+        };
+
+        // Simple splitting based on headers
+        const parts = text.split(/## \d+\. /); // Matches "## 1. ", "## 2. ", etc.
+
+        if (parts.length > 1) sections.research = "## 1. " + parts[1];
+        if (parts.length > 2) sections.lovable = extractCodeBlock(parts[2]);
+        if (parts.length > 3) sections.cursorFront = extractCodeBlock(parts[3]);
+        if (parts.length > 4) sections.cursorBack = extractCodeBlock(parts[4]);
+
+        // Fallback if headers aren't perfect yet (streaming)
+        if (!sections.research && text) sections.research = text;
+
+        return sections;
+    };
+
+    const extractCodeBlock = (text: string) => {
+        // Try to extract content inside ```markdown ... ``` or just return text
+        const match = text.match(/```(?:markdown)?\n([\s\S]*?)```/);
+        return match ? match[1] : text; // Return inner content or full text if no block yet
     };
 
     return (
@@ -100,24 +196,99 @@ Gemini a mis à jour les prompts ci-contre pour inclure ces correctifs spécifiq
                                 Workflow Architect
                             </span>
                         </h1>
+
                         <p className="text-muted-foreground text-sm">
                             {project.sources?.length || 0} sources connectées • Dernière analyse : {analysisData ? "À l'instant" : "Jamais"}
                         </p>
                     </div>
                 </div>
-                <Button onClick={handleAnalyze} disabled={isAnalyzing} className="gradient-bg">
-                    {isAnalyzing ? (
-                        <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Analyse en cours...
-                        </>
-                    ) : (
-                        <>
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            Lancer l'Analyse Gemini
-                        </>
-                    )}
-                </Button>
+                <div className="flex gap-2">
+                    <Dialog open={isAddSourceOpen} onOpenChange={setIsAddSourceOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Ajouter une source
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Ajouter une source</DialogTitle>
+                                <DialogDescription>
+                                    Ajoutez un dossier local, un dépôt GitHub ou un fichier Drive.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                    <Label>Type de source</Label>
+                                    <select
+                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        value={newSource.type}
+                                        onChange={(e) => setNewSource({ ...newSource, type: e.target.value })}
+                                    >
+                                        <option value="local">Dossier Local</option>
+                                        <option value="github">GitHub Repository</option>
+                                        <option value="drive">Google Drive</option>
+                                    </select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Chemin / URL</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={newSource.path}
+                                            onChange={(e) => setNewSource({ ...newSource, path: e.target.value })}
+                                            placeholder={newSource.type === 'github' ? 'user/repo' : '/path/to/folder'}
+                                        />
+                                        {newSource.type === 'local' && (
+                                            <>
+                                                <input
+                                                    type="file"
+                                                    // @ts-ignore
+                                                    webkitdirectory=""
+                                                    directory=""
+                                                    style={{ display: 'none' }}
+                                                    onChange={(e) => {
+                                                        if (e.target.files && e.target.files.length > 0) {
+                                                            const file = e.target.files[0];
+                                                            // @ts-ignore
+                                                            const path = file.path ? file.path.substring(0, file.path.lastIndexOf(file.name)) : (file.webkitRelativePath.split('/')[0] || file.name);
+                                                            const cleanPath = path.endsWith('/') || path.endsWith('\\') ? path.slice(0, -1) : path;
+                                                            setNewSource({ ...newSource, path: cleanPath });
+                                                        }
+                                                    }}
+                                                    id="add-source-picker"
+                                                />
+                                                <Button
+                                                    variant="secondary"
+                                                    size="icon"
+                                                    onClick={() => document.getElementById('add-source-picker')?.click()}
+                                                >
+                                                    <FolderOpen className="w-4 h-4" />
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button onClick={handleAddSource}>Ajouter</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Button onClick={handleAnalyze} disabled={isAnalyzing} className="gradient-bg">
+                        {isAnalyzing ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Analyse en cours...
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Lancer l'Analyse Gemini
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
 
             {/* Content */}

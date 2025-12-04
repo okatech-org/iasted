@@ -4,51 +4,101 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from 'next-themes';
 import { Moon, Sun, Key, Github, HardDrive, Save, Map, CheckCircle2, AlertCircle, Loader2, Settings, Database, Shield, Trash2, ExternalLink, DollarSign, BarChart3, TrendingUp, PieChart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
+
+import { integrationsService, ApiKeys, AVAILABLE_MODELS, ModelPreferences } from '@/services/IntegrationsService';
+
+interface UsageLog {
+    id: string;
+    provider: string;
+    model: string;
+    tokens_in: number;
+    tokens_out: number;
+    cost: number;
+    mode: string;
+    created_at: string;
+}
 
 export function SettingsView() {
     const { theme, setTheme } = useTheme();
-    const [apiKeys, setApiKeys] = useState({
+    const [apiKeys, setApiKeys] = useState<ApiKeys>({
         openai: '',
         anthropic: '',
         gemini: '',
         github: '',
         mapbox: ''
     });
+    const [modelPreferences, setModelPreferences] = useState<ModelPreferences>({
+        openai: 'gpt-4o',
+        anthropic: 'claude-3-5-sonnet-20240620',
+        gemini: 'gemini-1.5-pro'
+    });
+    const [modelStatuses, setModelStatuses] = useState<Record<string, 'pending' | 'loading' | 'valid' | 'invalid'>>({});
+    const [diagnosticRunning, setDiagnosticRunning] = useState(false);
     const [verifying, setVerifying] = useState<string | null>(null);
     const [status, setStatus] = useState<Record<string, 'valid' | 'invalid' | null>>({});
-    const [usageLogs, setUsageLogs] = useState<any[]>([]);
+    const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
     const [loadingLogs, setLoadingLogs] = useState(false);
 
     useEffect(() => {
-        const savedKeys = localStorage.getItem('iasted_api_keys');
-        if (savedKeys) {
-            const parsed = JSON.parse(savedKeys);
-            setApiKeys(parsed);
+        const keys = integrationsService.getApiKeys();
+        setApiKeys(keys);
 
-            // Auto-verify known keys on load
-            Object.keys(parsed).forEach(key => {
-                if (parsed[key]) verifyKey(key, parsed[key]);
-            });
-        }
+        const models = integrationsService.getModelPreferences();
+        setModelPreferences(models);
+
+        // Auto-verify known keys on load
+        Object.keys(keys).forEach(key => {
+            if (keys[key]) verifyKey(key, keys[key]);
+        });
+
         fetchUsageLogs();
     }, []);
+
+    const runDiagnostic = async () => {
+        setDiagnosticRunning(true);
+        const newStatuses: Record<string, 'pending' | 'loading' | 'valid' | 'invalid'> = {};
+
+        // Initialize statuses
+        Object.keys(AVAILABLE_MODELS).forEach(provider => {
+            if (apiKeys[provider]) {
+                AVAILABLE_MODELS[provider as keyof typeof AVAILABLE_MODELS].forEach(model => {
+                    newStatuses[model.id] = 'pending';
+                });
+            }
+        });
+        setModelStatuses(newStatuses);
+
+        for (const provider of Object.keys(AVAILABLE_MODELS)) {
+            if (!apiKeys[provider]) continue;
+
+            const models = AVAILABLE_MODELS[provider as keyof typeof AVAILABLE_MODELS];
+            for (const model of models) {
+                setModelStatuses(prev => ({ ...prev, [model.id]: 'loading' }));
+                const result = await integrationsService.verifyModel(model.id, apiKeys[provider]);
+                setModelStatuses(prev => ({ ...prev, [model.id]: result.valid ? 'valid' : 'invalid' }));
+            }
+        }
+        setDiagnosticRunning(false);
+    };
 
     const fetchUsageLogs = async () => {
         setLoadingLogs(true);
         try {
             const { data, error } = await supabase
-                .from('usage_logs' as any)
+                .from('usage_logs' as any) // eslint-disable-line @typescript-eslint/no-explicit-any
                 .select('*')
                 .order('created_at', { ascending: false })
                 .limit(100);
 
             if (error) throw error;
-            setUsageLogs(data || []);
+            setUsageLogs((data as unknown as UsageLog[]) || []);
         } catch (error) {
             console.error('Error fetching usage logs:', error);
         } finally {
@@ -62,32 +112,7 @@ export function SettingsView() {
         setStatus(prev => ({ ...prev, [provider]: null }));
 
         try {
-            let isValid = false;
-            // Smart Verification (Hybrid: Known Keys + Format)
-            // Note: Real backend verification requires deployment. 
-            // We use the results from our internal diagnostics for the provided keys.
-
-            const knownKeys: Record<string, boolean> = {
-                // 'sk-proj-...': true, // Verified Valid
-                // 'sk-ant-...': false // Verified Invalid
-            };
-
-            if (key in knownKeys) {
-                isValid = knownKeys[key];
-                // Simulate network delay for realism
-                await new Promise(resolve => setTimeout(resolve, 800));
-            } else {
-                // Fallback to strict format check for new keys
-                switch (provider) {
-                    case 'openai': isValid = key.startsWith('sk-proj-') && key.length > 40; break;
-                    case 'anthropic': isValid = key.startsWith('sk-ant-') && key.length > 40; break;
-                    case 'github': isValid = key.length > 30; break;
-                    case 'mapbox': isValid = key.startsWith('pk.') || key.startsWith('sk.'); break;
-                    case 'gemini': isValid = key.length > 20; break;
-                    default: isValid = true;
-                }
-                await new Promise(resolve => setTimeout(resolve, 800));
-            }
+            const isValid = await integrationsService.verifyKey(provider, key);
 
             if (isValid) {
                 setStatus(prev => ({ ...prev, [provider]: 'valid' }));
@@ -104,53 +129,85 @@ export function SettingsView() {
     };
 
     const handleSaveKeys = () => {
-        localStorage.setItem('iasted_api_keys', JSON.stringify(apiKeys));
-        toast.success('Configuration sauvegardée');
+        integrationsService.saveApiKeys(apiKeys);
+        integrationsService.saveModelPreferences(modelPreferences);
     };
 
     const handleClearCache = () => {
         if (confirm("Voulez-vous vraiment effacer le cache local ? Cela ne supprimera pas vos clés.")) {
             // Clear everything except keys
-            const keys = localStorage.getItem('iasted_api_keys');
+            const keys = integrationsService.getApiKeys();
+            const models = integrationsService.getModelPreferences();
             localStorage.clear();
-            if (keys) localStorage.setItem('iasted_api_keys', keys);
+            integrationsService.saveApiKeys(keys);
+            integrationsService.saveModelPreferences(models);
             toast.success("Cache nettoyé avec succès");
         }
     };
 
-    const isConnected = (key: string) => key && key.length > 10;
+    const renderKeyInput = (id: string, label: string, placeholder: string, icon?: React.ReactNode) => {
+        const models = AVAILABLE_MODELS[id as keyof typeof AVAILABLE_MODELS];
 
-    const renderKeyInput = (id: string, label: string, placeholder: string, icon?: React.ReactNode) => (
-        <div className="grid gap-2">
-            <Label htmlFor={id} className="flex items-center gap-2">
-                {icon} {label}
-            </Label>
-            <div className="flex gap-2">
-                <Input
-                    id={id}
-                    type="password"
-                    placeholder={placeholder}
-                    value={(apiKeys as any)[id]}
-                    onChange={(e) => {
-                        setApiKeys({ ...apiKeys, [id]: e.target.value });
-                        setStatus(prev => ({ ...prev, [id]: null }));
-                    }}
-                    className={status[id] === 'valid' ? 'border-green-500 focus-visible:ring-green-500' : status[id] === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                />
-                <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => verifyKey(id, (apiKeys as any)[id])}
-                    disabled={verifying === id || !(apiKeys as any)[id]}
-                >
-                    {verifying === id ? <Loader2 className="w-4 h-4 animate-spin" /> :
-                        status[id] === 'valid' ? <CheckCircle2 className="w-4 h-4 text-green-500" /> :
-                            status[id] === 'invalid' ? <AlertCircle className="w-4 h-4 text-red-500" /> :
-                                <CheckCircle2 className="w-4 h-4 text-muted-foreground" />}
-                </Button>
+        return (
+            <div className="grid gap-2 p-4 border rounded-lg bg-card/50">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor={id} className="flex items-center gap-2 font-medium">
+                        {icon} {label}
+                    </Label>
+                    {models && (
+                        <Select
+                            value={modelPreferences[id]}
+                            onValueChange={(value) => setModelPreferences(prev => ({ ...prev, [id]: value }))}
+                        >
+                            <SelectTrigger className="w-[180px] h-8 text-xs">
+                                <SelectValue placeholder="Choisir un modèle" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {models.map((model) => (
+                                    <SelectItem key={model.id} value={model.id} className="text-xs">
+                                        <div className="flex items-center gap-2">
+                                            {model.name}
+                                            {modelStatuses[model.id] === 'valid' && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                                            {modelStatuses[model.id] === 'invalid' && <AlertCircle className="w-3 h-3 text-red-500" />}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                </div>
+
+                <div className="flex gap-2">
+                    <Input
+                        id={id}
+                        type="password"
+                        placeholder={placeholder}
+                        value={apiKeys[id] || ''}
+                        onChange={(e) => {
+                            setApiKeys({ ...apiKeys, [id]: e.target.value });
+                            setStatus(prev => ({ ...prev, [id]: null }));
+                        }}
+                        className={cn(
+                            "font-mono text-sm",
+                            status[id] === 'valid' ? 'border-green-500 focus-visible:ring-green-500' :
+                                status[id] === 'invalid' ? 'border-red-500 focus-visible:ring-red-500' : ''
+                        )}
+                    />
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => verifyKey(id, apiKeys[id])}
+                        disabled={verifying === id || !apiKeys[id]}
+                    >
+                        {verifying === id ? <Loader2 className="w-4 h-4 animate-spin" /> :
+                            status[id] === 'valid' ? <CheckCircle2 className="w-4 h-4 text-green-500" /> :
+                                status[id] === 'invalid' ? <AlertCircle className="w-4 h-4 text-red-500" /> :
+                                    <CheckCircle2 className="w-4 h-4 text-muted-foreground" />}
+                    </Button>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="h-full flex flex-col bg-background">
@@ -210,13 +267,54 @@ export function SettingsView() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Modèles de Langage</CardTitle>
-                                    <CardDescription>Configurez les cerveaux de l'orchestrateur</CardDescription>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle>Modèles de Langage</CardTitle>
+                                            <CardDescription>Configurez les cerveaux de l'orchestrateur</CardDescription>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={runDiagnostic}
+                                            disabled={diagnosticRunning}
+                                            className={cn(diagnosticRunning && "animate-pulse")}
+                                        >
+                                            {diagnosticRunning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                                            Vérifier la compatibilité
+                                        </Button>
+                                    </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    {renderKeyInput('openai', 'OpenAI (GPT-4)', 'sk-proj-...')}
-                                    {renderKeyInput('anthropic', 'Anthropic (Claude)', 'sk-ant-...')}
+                                    {renderKeyInput('openai', 'OpenAI', 'sk-proj-...')}
+                                    {renderKeyInput('anthropic', 'Anthropic', 'sk-ant-...')}
                                     {renderKeyInput('gemini', 'Google Gemini', 'AIza...')}
+
+                                    {Object.keys(modelStatuses).length > 0 && (
+                                        <div className="mt-4 p-4 border rounded-lg bg-muted/30">
+                                            <h3 className="font-medium mb-3 text-sm">Résultats du Diagnostic</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                {Object.entries(modelStatuses).map(([modelId, status]) => {
+                                                    // Find model name
+                                                    let modelName = modelId;
+                                                    Object.values(AVAILABLE_MODELS).forEach((models: { id: string; name: string }[]) => {
+                                                        const found = models.find((m: { id: string; name: string }) => m.id === modelId);
+                                                        if (found) modelName = found.name;
+                                                    });
+
+                                                    return (
+                                                        <div key={modelId} className="flex items-center justify-between text-xs p-2 rounded border bg-background">
+                                                            <span className="truncate mr-2" title={modelName}>{modelName}</span>
+                                                            {status === 'loading' && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                                                            {status === 'valid' && <span className="flex items-center text-green-600"><CheckCircle2 className="w-3 h-3 mr-1" /> OK</span>}
+                                                            {status === 'invalid' && <span className="flex items-center text-red-500"><AlertCircle className="w-3 h-3 mr-1" /> HS</span>}
+                                                            {status === 'pending' && <span className="text-muted-foreground">-</span>}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <Button onClick={handleSaveKeys} className="w-full gradient-bg mt-4">
                                         <Save className="w-4 h-4 mr-2" /> Sauvegarder
                                     </Button>
@@ -271,8 +369,16 @@ export function SettingsView() {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Historique d'Utilisation</CardTitle>
-                                    <CardDescription>Détail des appels aux modèles d'IA</CardDescription>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle>Historique d'Utilisation</CardTitle>
+                                            <CardDescription>Détail des appels aux modèles d'IA</CardDescription>
+                                        </div>
+                                        <Button variant="ghost" size="sm" onClick={fetchUsageLogs} disabled={loadingLogs}>
+                                            <Loader2 className={cn("w-4 h-4 mr-2", loadingLogs && "animate-spin")} />
+                                            Actualiser
+                                        </Button>
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-4">
@@ -332,12 +438,12 @@ export function SettingsView() {
                                             <div>
                                                 <p className="font-medium">GitHub</p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {isConnected(apiKeys.github) ? 'Connecté via Token' : 'Non connecté'}
+                                                    {integrationsService.isConnected(apiKeys.github) ? 'Connecté via Token' : 'Non connecté'}
                                                 </p>
                                             </div>
                                         </div>
-                                        <Button variant={isConnected(apiKeys.github) ? "outline" : "default"} className={isConnected(apiKeys.github) ? "text-green-600 border-green-200 bg-green-50" : ""}>
-                                            {isConnected(apiKeys.github) ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Connecté</> : "Connecter"}
+                                        <Button variant={integrationsService.isConnected(apiKeys.github) ? "outline" : "default"} className={integrationsService.isConnected(apiKeys.github) ? "text-green-600 border-green-200 bg-green-50" : ""}>
+                                            {integrationsService.isConnected(apiKeys.github) ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Connecté</> : "Connecter"}
                                         </Button>
                                     </div>
                                     {renderKeyInput('github', 'Personal Access Token', 'ghp_...')}
@@ -350,8 +456,8 @@ export function SettingsView() {
                                                 <p className="text-sm text-muted-foreground">Cartographie</p>
                                             </div>
                                         </div>
-                                        <Button variant={isConnected(apiKeys.mapbox) ? "outline" : "default"} className={isConnected(apiKeys.mapbox) ? "text-green-600 border-green-200 bg-green-50" : ""}>
-                                            {isConnected(apiKeys.mapbox) ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Connecté</> : "Connecter"}
+                                        <Button variant={integrationsService.isConnected(apiKeys.mapbox) ? "outline" : "default"} className={integrationsService.isConnected(apiKeys.mapbox) ? "text-green-600 border-green-200 bg-green-50" : ""}>
+                                            {integrationsService.isConnected(apiKeys.mapbox) ? <><CheckCircle2 className="w-4 h-4 mr-2" /> Connecté</> : "Connecter"}
                                         </Button>
                                     </div>
                                     {renderKeyInput('mapbox', 'Public Key', 'pk....')}
