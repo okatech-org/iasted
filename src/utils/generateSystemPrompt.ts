@@ -1,5 +1,18 @@
-import type { UserContext } from '@/hooks/useUserContext';
 import { getSectionsForRole } from '@/config/navigation-mapping';
+import type { RoleContext, SpaceContext, AppRole } from '@/config/role-contexts';
+
+export interface UserProfile {
+    gender?: 'male' | 'female';
+    preferred_title?: string;
+    tone_preference?: 'formal' | 'professional';
+}
+
+export interface UserContext {
+    role: AppRole | null;
+    profile: UserProfile | null;
+    roleContext: RoleContext | null;
+    spaceContext: SpaceContext | null;
+}
 
 /**
  * Generate a personalized system prompt for iAsted based on user context
