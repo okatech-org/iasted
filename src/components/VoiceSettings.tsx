@@ -69,7 +69,7 @@ export function VoiceSettings({ onResumeSession }: VoiceSettingsProps = {}) {
       onResumeSession(sessionId);
     } else {
       toast.info("Redirection vers l'iAsted...");
-      window.location.href = `/minister-dashboard/iasted?session=${sessionId}`;
+      window.location.href = `/iasted?session=${sessionId}`;
     }
   };
 
